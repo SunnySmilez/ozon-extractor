@@ -18,11 +18,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install selenium pyinstaller
+          pip install requests beautifulsoup4 pyinstaller
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --name ozon_extractor --console ozon_extractor.py
+          pyinstaller --onefile --name ozon_extractor --console --collect-all bs4 --collect-all requests ozon_extractor.py
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
