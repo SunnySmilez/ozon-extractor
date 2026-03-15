@@ -1,47 +1,52 @@
 import sys
 import os
 import time
+import random
+import requests
+from bs4 import BeautifulSoup
 
-# 强制 PyInstaller 打包时包含所有 selenium 子模块
-import selenium
-import selenium.webdriver
-import selenium.webdriver.chrome
-import selenium.webdriver.chrome.webdriver
-import selenium.webdriver.chrome.options
-import selenium.webdriver.chrome.service
-import selenium.webdriver.common.by
-import selenium.webdriver.support.ui
-import selenium.webdriver.support.expected_conditions as EC
+HEADERS_LIST = [
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+    }
+]
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC2
-from selenium.webdriver.chrome.service import Service
-
-
-def get_redirect_url(driver, url, timeout=15):
-    try:
-        driver.get(url)
-        wait = WebDriverWait(driver, timeout)
+def get_links(url, session, retries=3):
+    for attempt in range(retries):
         try:
-            elements = wait.until(
-                EC2.presence_of_all_elements_located((By.CSS_SELECTOR, ".pdp_a8m a"))
-            )
-            links = []
-            for el in elements:
-                href = el.get_attribute("href")
-                if href:
-                    links.append(href)
-            return links if links else ["[未找到链接]"]
-        except Exception:
-            elements = driver.find_elements(By.CSS_SELECTOR, ".pdp_a8m a")
-            links = [el.get_attribute("href") for el in elements if el.get_attribute("href")]
-            return links if links else ["[未找到 pdp_a8m 元素或链接]"]
-    except Exception as e:
-        return [f"[错误: {str(e)}]"]
-
+            headers = random.choice(HEADERS_LIST)
+            resp = session.get(url, headers=headers, timeout=20, allow_redirects=True)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                # 找 class 包含 pdp_a8m 的元素里的 a 标签
+                containers = soup.find_all(class_=lambda c: c and "pdp_a8m" in c.split())
+                links = []
+                for container in containers:
+                    for a in container.find_all("a", href=True):
+                        href = a["href"]
+                        if href.startswith("/"):
+                            href = "https://www.ozon.ru" + href
+                        links.append(href)
+                if links:
+                    return links
+                # 也直接搜索所有 a[href] 在 pdp_a8m class 里
+                return ["[未找到 pdp_a8m 链接，页面可能需要登录或有反爬]"]
+            elif resp.status_code == 429:
+                wait = 10 * (attempt + 1)
+                print(f"  被限速，等待 {wait}s...")
+                time.sleep(wait)
+            else:
+                return [f"[HTTP {resp.status_code}]"]
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(5)
+            else:
+                return [f"[错误: {str(e)}]"]
+    return ["[重试失败]"]
 
 def main():
     if len(sys.argv) > 1:
@@ -64,34 +69,21 @@ def main():
 
     print(f"共读取 {len(urls)} 个URL，开始处理...")
 
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
-    )
-
-    driver = webdriver.Chrome(options=options)
-    driver.execute_script(
-        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-    )
+    session = requests.Session()
+    # 先访问首页，获取 cookies
+    try:
+        session.get("https://www.ozon.ru", timeout=15)
+    except:
+        pass
 
     results = []
     for i, url in enumerate(urls, 1):
         print(f"[{i}/{len(urls)}] 处理: {url}")
-        links = get_redirect_url(driver, url)
+        links = get_links(url, session)
         for link in links:
+            print(f"  -> {link}")
             results.append(f"{url}\t{link}")
-        time.sleep(2)
-
-    driver.quit()
+        time.sleep(random.uniform(2, 4))
 
     input_dir = os.path.dirname(os.path.abspath(input_file))
     output_file = os.path.join(input_dir, "output_links.txt")
@@ -102,7 +94,6 @@ def main():
     print(f"\n完成！共处理 {len(urls)} 个URL")
     print(f"结果已保存到: {output_file}")
     input("按回车退出...")
-
 
 if __name__ == "__main__":
     main()
