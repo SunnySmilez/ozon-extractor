@@ -1,0 +1,37 @@
+====== ozon_extractor 使用说明 ======
+
+【功能】
+批量抓取 ozon.ru 商品页面中 class="pdp_a8m" 里的跳转链接
+
+【使用方法】
+1. 准备一个 txt 文件，每行一个 ozon URL，例如：
+   urls.txt 内容：
+   https://www.ozon.ru/product/xxx-111/
+   https://www.ozon.ru/product/yyy-222/
+   https://www.ozon.ru/product/zzz-333/
+
+2. 双击运行 ozon_extractor.exe，或把 urls.txt 拖到 exe 上
+
+3. 程序运行完成后，同目录生成 output_links.txt
+   格式：原始URL [Tab] 跳转链接
+
+【Windows 打包步骤（需要在 Windows 电脑上操作）】
+1. 安装 Python 3.10+（https://python.org）
+2. 安装 Chrome 浏览器（https://chrome.google.com）
+3. 下载 ChromeDriver（版本必须和 Chrome 一致）：
+   https://chromedriver.chromium.org/downloads
+   或新版：https://googlechromelabs.github.io/chrome-for-testing/
+   把 chromedriver.exe 放到与 ozon_extractor.py 同目录
+
+4. 打开命令提示符（cmd），运行：
+   pip install selenium pyinstaller
+   pyinstaller --onefile --name ozon_extractor ozon_extractor.py
+
+5. 打包好的 ozon_extractor.exe 在 dist 目录里
+
+【注意事项】
+- ozon.ru 有反爬机制，建议每次处理不超过100个链接
+- 如果遇到被封，可以把代码里 time.sleep(2) 改成 time.sleep(5)
+- 需要有网络能访问 ozon.ru（俄罗斯网站，部分地区需要代理）
+
+====== END ======
